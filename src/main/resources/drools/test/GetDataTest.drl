@@ -1,0 +1,28 @@
+package drools.test
+import com.github.simoant.drools.analyzer.*
+import com.github.simoant.drools.analyzer.utils.*
+import com.github.simoant.drools.analyzer.model.DataRequest
+import com.github.simoant.drools.analyzer.model.AnalyzerResponse
+dialect "java"
+
+global Context ctx;
+
+rule FirstRule
+when
+    $obj: TestInput($value: value)
+then
+    DataRequest dr = new DataRequest("first", "first request", true, false);
+    DataRequest dr2 = new DataRequest("second", "first request", true, false);
+    ctx.log("First rule");
+    insertLogical(dr);
+    insertLogical(dr2);
+ end
+
+rule SecondRule
+when
+    $obj: FirstTestObject()
+then
+    AnalyzerResponse ar = new AnalyzerResponse("response");
+    insertLogical(ar);
+    ctx.log("Second rule");
+ end
