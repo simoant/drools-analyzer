@@ -12,11 +12,12 @@ fun listToIndentedString(list: List<Any?>, indents: Int = 0): String {
 }
 
 class Logger() {
+    val DEFAULT_INDENTS: Int = 3
     var logStrBuffer: String = ""
     var logObjBuffer: List<Any> = LinkedList()
 
     fun log(msg: String, vararg args: Any) {
-        logWithIndent(msg, 1, *args)
+        logWithIndent(msg, DEFAULT_INDENTS, *args)
     }
 
     fun logWithIndent(msg: String, indents: Int, vararg args: Any) {

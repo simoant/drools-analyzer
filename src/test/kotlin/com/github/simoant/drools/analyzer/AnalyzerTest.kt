@@ -3,7 +3,6 @@ package com.github.simoant.drools.analyzer
 import com.github.simoant.drools.analyzer.model.AnalyzerRequest
 import com.github.simoant.drools.analyzer.model.AnalyzerResponse
 import com.github.simoant.drools.analyzer.model.DataRequest
-import com.github.simoant.drools.analyzer.model.DataResponse
 import com.github.simoant.drools.analyzer.utils.log
 import org.assertj.core.api.Assertions
 import org.junit.Test
@@ -18,7 +17,7 @@ class AnalyzerTest {
     @Test
     fun `test one rule requests data and second supplies data`() {
         //  given
-        val kieContainer = createTestKieContainer("drools/test/GetDataTest.drl")
+        val kieContainer = createTestKieContainer("resources/drools/test/GetDataTest.drl")
         val analyzer = Analyzer(kieContainer, TestRequestProcessor())
 
         //  when
@@ -31,7 +30,7 @@ class AnalyzerTest {
     @Test
     fun `test request optional data but get no data from provider`() {
         //  given
-        val kieContainer = createTestKieContainer("drools/test/TestNoResultOptional.drl")
+        val kieContainer = createTestKieContainer("resources/drools/test/TestNoResultOptional.drl")
         val analyzer = Analyzer(kieContainer, TestRequestProcessor())
 
         //  when
@@ -46,7 +45,7 @@ class AnalyzerTest {
 
     fun `test request mandatory data but get no data from provider`() {
         //  given
-        val kieContainer = createTestKieContainer("drools/test/TestNoResultMandatory.drl")
+        val kieContainer = createTestKieContainer("resources/drools/test/TestNoResultMandatory.drl")
         val analyzer = Analyzer(kieContainer, TestRequestProcessor())
 
         //  when
@@ -60,10 +59,14 @@ class AnalyzerTest {
     }
 
     private fun createTestKieContainer(drlPath: String): KieContainer {
+
         val resources = listOf(
             // loads file from "real" filesystem
-            ResourceFactory
-                .newClassPathResource(drlPath)
+
+             ResourceFactory
+                 .newFileResource(javaClass.classLoader.getResource(drlPath)!!.file)
+
+
         )
 
         val ks = KieServices.Factory.get()
@@ -76,27 +79,27 @@ class AnalyzerTest {
     }
 
     class TestRequestProcessor : IDataRequestProcessor {
-        override fun executeAsync(request: DataRequest, trackId: String): CompletableFuture<DataResponse> {
+        override fun executeAsync(request: DataRequest, trackId: String): CompletableFuture<Any?> {
             log.debug("start $request")
             return CompletableFuture.completedFuture(
-                when (request.routeName) {
+                when (request.uri) {
                     "first" -> {
-                        DataResponse(FirstTestObject()).also { log.debug("finish $it") }
+                        FirstTestObject().also { log.debug("finish $it") }
                     }
                     "second" -> {
-                        DataResponse(SecondTestObject()).also { log.debug("finish $it") }
+                        SecondTestObject().also { log.debug("finish $it") }
                     }
                     "first_delayed" -> {
                         Thread.sleep(100)
-                        DataResponse(SecondTestObject()).also { log.debug("finish $it") }
+                        SecondTestObject().also { log.debug("finish $it") }
                     }
                     "error" -> {
                         throw java.lang.RuntimeException("Test Exception")
                     }
                     "no_data" -> {
-                        DataResponse(null)
+                        null
                     }
-                    else -> throw RuntimeException("Invalid routeName ${request.routeName}")
+                    else -> throw RuntimeException("Invalid uri ${request.uri}")
                 })
 
         }
@@ -104,7 +107,6 @@ class AnalyzerTest {
 }
 
 data class TestInput(val value: String = "input")
-
 data class FirstTestObject(val value: String = "first")
 data class SecondTestObject(val value: String = "second")
 

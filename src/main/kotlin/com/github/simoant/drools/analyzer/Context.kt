@@ -30,10 +30,13 @@ data class Context(val request: AnalyzerRequest, val kieContainer: KieContainer)
 
     val logger = Logger()
 
+    private val startTime: Long;
+
     init {
         this.kieSession = kieContainer.newKieSession(request.sessionName)
         kieSession.setGlobal("ctx", this)
         request.input.forEach { kieSession.insert(it) }
+        startTime = System.currentTimeMillis()
     }
 
     val ready: Boolean
@@ -84,19 +87,27 @@ data class Context(val request: AnalyzerRequest, val kieContainer: KieContainer)
 
     }
 
-    suspend fun getAllData(dataProvider: (DataRequest) -> CompletableFuture<DataResponse>): List<DataResponse> {
+    suspend fun getAllData(dataProvider: (DataRequest) -> CompletableFuture<Any?>): List<DataResponse> {
 
         val reqResp = dataRequests
             .map { request -> DataRequestDefferedResponse(request, dataProvider(request).asDeferred()) }
+            .map {
+                val resp = it
+                it.deferredResponse.invokeOnCompletion {
+                    resp.et = System.currentTimeMillis() - resp.startTime
+                }
+                resp
+            }
 
-        withContext(Dispatchers.Default + MDCContext()) {
+        withContext(Dispatchers.IO + MDCContext()) {
             reqResp.map { it.deferredResponse }
                 .awaitAll()
         }
 
         val requestsResponses = reqResp.map {
             val exception = it.deferredResponse.getCompletionExceptionOrNull()
-            val response = it.deferredResponse.getCompleted().data
+            val data = it.deferredResponse.getCompleted()
+
             if (exception != null) {
                 val msg = "Exception occured when processing request ${it.request}, Exception: $exception"
                 if (it.request.required) {
@@ -104,28 +115,30 @@ data class Context(val request: AnalyzerRequest, val kieContainer: KieContainer)
                     throw DataMissingException(msg)
                 } else {
                     log.debug(msg)
-                    return@map DataRequestResponse(it.request, DataResponse(null))
+                    return@map DataRequestResponse(it.request, DataResponse(it.request.uri, null, it.et))
                 }
             }
-            if (response == null) {
+            if (data == null) {
                 val msg = "No data received when processing request ${it.request}"
                 if (it.request.required) {
                     flashLog()
                     throw DataMissingException(msg)
                 } else {
                     log.debug(msg)
-                    return@map DataRequestResponse(it.request, DataResponse(response))
+                    return@map DataRequestResponse(it.request, DataResponse(it.request.uri, data, it.et))
                 }
 
             }
-            return@map DataRequestResponse(it.request, DataResponse(response))
+            return@map DataRequestResponse(it.request, DataResponse(it.request.uri, data, it.et))
         }
 
 
         factHandles
             .filter { kieSession.getObject(it) is DataRequest }
             .forEach { kieSession.delete(it) }
+
         prevResponses = requestsResponses.map { it.response }
+
         requestsResponses.forEach {
             val data = it.response.data
             if (data is List<*> && it.request.splitList)
@@ -148,6 +161,7 @@ data class Context(val request: AnalyzerRequest, val kieContainer: KieContainer)
     }
 
     fun flashLog() {
+        logger.log("Drools Execution Time: ${System.currentTimeMillis() - startTime} ms")
         logger.flushLog("\nDROOLS:${request.sessionName}")
     }
 
@@ -155,22 +169,22 @@ data class Context(val request: AnalyzerRequest, val kieContainer: KieContainer)
     private fun logIterationResult() {
         val initialRequest = if (iterationCount == 1) request.input else listOf()
         val inputData =
-            prevResponses.map { it.data } + initialRequest + markers
+            prevResponses.map { it } + initialRequest + markers
         val prevRespDataString =
-            listToIndentedString(inputData, 5)
+            listToIndentedString(inputData, logger.DEFAULT_INDENTS * 2 )
         val dataResponsesString =
-            listToIndentedString(dataRequests, 5)
+            listToIndentedString(dataRequests, logger.DEFAULT_INDENTS * 2)
 
         val factHandles =
             factHandles
                 .map { kieSession.getObject(it)}
-                .filter {it is IDroolsDecision }
+                .filter {it is IDroolsDecision}
                 .let { listToIndentedString(it, 5) }
 //                .joinToString(",")
 //                .let { listToIndentedString(listOf(it), 5) }
 
         logger.log("-Input data:\n{}", prevRespDataString)
-        logger.log("-Fact handles:\n{}", factHandles)
+        logger.log("-Decisions:\n{}", factHandles)
         logger.log("-Output data requests:\n{}", dataResponsesString)
         logger.log("-Rules fired:{}", countFired)
     }
