@@ -197,5 +197,10 @@ data class Context(val request: AnalyzerRequest,
         logger.log("-Rules fired:{}", countFired)
     }
 
+    fun close() {
+        flashLog()
+        kieSession.dispose()
+    }
+
 
 }

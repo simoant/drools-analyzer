@@ -63,8 +63,10 @@ class Analyzer(val kieContainer: KieContainer,
                     }
 
                     onComplete(ctx)
-                    ctx.flashLog()
-                    ctx.getResponse()
+
+                    val res = ctx.getResponse()
+                    ctx.close()
+                    res
                 }
         }
         return res
