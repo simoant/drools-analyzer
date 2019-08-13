@@ -18,7 +18,7 @@ class AnalyzerTest {
     fun `test one rule requests data and second supplies data`() {
         //  given
         val kieContainer = createTestKieContainer("resources/drools/test/GetDataTest.drl")
-        val analyzer = Analyzer(kieContainer, TestRequestProcessor())
+        val analyzer = Analyzer(kieContainer, TestRequestProcessor(), null)
 
         //  when
         val res = analyzer.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
@@ -31,7 +31,7 @@ class AnalyzerTest {
     fun `test request optional data but get no data from provider`() {
         //  given
         val kieContainer = createTestKieContainer("resources/drools/test/TestNoResultOptional.drl")
-        val analyzer = Analyzer(kieContainer, TestRequestProcessor())
+        val analyzer = Analyzer(kieContainer, TestRequestProcessor(), null )
 
         //  when
         val res = analyzer.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
@@ -46,7 +46,7 @@ class AnalyzerTest {
     fun `test request mandatory data but get no data from provider`() {
         //  given
         val kieContainer = createTestKieContainer("resources/drools/test/TestNoResultMandatory.drl")
-        val analyzer = Analyzer(kieContainer, TestRequestProcessor())
+        val analyzer = Analyzer(kieContainer, TestRequestProcessor(), null )
 
         //  when
         val res = analyzer.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))

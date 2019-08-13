@@ -9,13 +9,17 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.future.asDeferred
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.withContext
+import org.drools.core.impl.AbstractRuntime
+import org.kie.api.logger.KieRuntimeLogger
 import org.kie.api.runtime.KieContainer
 import org.kie.api.runtime.KieSession
 import org.kie.api.runtime.rule.FactHandle
 import java.util.concurrent.CompletableFuture
 
 
-data class Context(val request: AnalyzerRequest, val kieContainer: KieContainer) {
+data class Context(val request: AnalyzerRequest,
+                   val kieContainer: KieContainer,
+                   val auditLoggerFactory: ((session: KieSession, request: AnalyzerRequest) -> KieRuntimeLogger?)? = null) {
 
     val kieSession: KieSession
 
@@ -30,11 +34,15 @@ data class Context(val request: AnalyzerRequest, val kieContainer: KieContainer)
 
     val logger = Logger()
 
-    private val startTime: Long;
+    private val startTime: Long
 
     init {
         this.kieSession = kieContainer.newKieSession(request.sessionName)
         kieSession.setGlobal("ctx", this)
+
+        if (auditLoggerFactory != null && request.id != null)
+            (kieSession as AbstractRuntime).logger = auditLoggerFactory.invoke(kieSession, request)
+
         request.input.forEach { kieSession.insert(it) }
         startTime = System.currentTimeMillis()
     }

@@ -7,17 +7,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.future
 import kotlinx.coroutines.slf4j.MDCContext
 import mu.withLoggingContext
+import org.kie.api.logger.KieRuntimeLogger
 import org.kie.api.runtime.KieContainer
+import org.kie.api.runtime.KieSession
 import java.util.*
 import java.util.concurrent.CompletableFuture
 
 
-class Analyzer(val kieContainer: KieContainer, val requestProcessor: IDataRequestProcessor) {
+typealias KieRuntimeLoggerFactory =
+    ((session: KieSession, request: AnalyzerRequest) -> KieRuntimeLogger?)
+
+class Analyzer(val kieContainer: KieContainer,
+               val requestProcessor: IDataRequestProcessor,
+               val auditLogFactory: KieRuntimeLoggerFactory? = null) {
     private val MAX_RULES: Int = 100;
 
     fun run(request: AnalyzerRequest, trackId: String = UUID.randomUUID().toString(),
             onComplete: (ctx: Context) -> Any? = {}): CompletableFuture<AnalyzerResponse?> {
-        val ctx = Context(request, kieContainer)
+
+        val ctx = Context(request, kieContainer, auditLogFactory)
 
         val res = withLoggingContext(X_UUID_NAME to trackId) {
             CoroutineScope(Dispatchers.Default)
