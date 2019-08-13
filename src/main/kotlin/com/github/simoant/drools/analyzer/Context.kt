@@ -179,12 +179,12 @@ data class Context(val request: AnalyzerRequest, val kieContainer: KieContainer)
             factHandles
                 .map { kieSession.getObject(it)}
                 .filter {it is IDroolsDecision}
-                .let { listToIndentedString(it, 5) }
+                .let { listToIndentedString(it, logger.DEFAULT_INDENTS * 2) }
 //                .joinToString(",")
 //                .let { listToIndentedString(listOf(it), 5) }
 
         logger.log("-Input data:\n{}", prevRespDataString)
-        logger.log("-Decisions:\n{}", factHandles)
+        logger.log("-Decisionяs:\n{}", factHandles)
         logger.log("-Output data requests:\n{}", dataResponsesString)
         logger.log("-Rules fired:{}", countFired)
     }
