@@ -30,43 +30,47 @@ class Analyzer(val kieContainer: KieContainer,
         val res = withLoggingContext(X_UUID_NAME to trackId) {
             CoroutineScope(Dispatchers.Default)
                 .future(MDCContext()) {
-                    while (!ctx.ready) {
+                    try {
+                        while (!ctx.ready) {
 
-                        ctx.logWithIndent("Iteration #${ctx.iterationCount}", indents = 0)
+                            ctx.logWithIndent("Iteration #${ctx.iterationCount}", indents = 0)
 
-                        if (!ctx.ready) {
-                            if (ctx.countFired == 0) {
-                                if (ctx.isAggrPhase()) {
-                                    ctx.aggrPhaseOff()
-                                    ctx.log(" Switch to Normal Phase")
+                            if (!ctx.ready) {
+                                if (ctx.countFired == 0) {
+                                    if (ctx.isAggrPhase()) {
+                                        ctx.aggrPhaseOff()
+                                        ctx.log(" Switch to Normal Phase")
+                                    } else {
+                                        ctx.aggrPhaseOn()
+                                        ctx.log(" Switch to Aggregation Phase")
+                                    }
                                 } else {
-                                    ctx.aggrPhaseOn()
-                                    ctx.log(" Switch to Aggregation Phase")
-                                }
-                            } else {
-                                if (ctx.isAggrPhase()) {
-                                    ctx.aggrPhaseOff()
+                                    if (ctx.isAggrPhase()) {
+                                        ctx.aggrPhaseOff()
+                                    }
                                 }
                             }
-                        }
 
-                        ctx.fireAllRules(MAX_RULES)
-                        //val countFired = session.fireAllRules(MAX_RULES)
+                            ctx.fireAllRules(MAX_RULES)
+                            //val countFired = session.fireAllRules(MAX_RULES)
 
 
-                        ctx.getAllData()
-                        { dataRequest ->
-                            withLoggingContext(X_UUID_NAME to trackId) {
+                            ctx.getAllData()
+                            { dataRequest ->
+                                withLoggingContext(X_UUID_NAME to trackId) {
                                     requestProcessor.executeAsync(dataRequest, trackId)
+                                }
                             }
                         }
+
+                        onComplete(ctx)
+
+                        val res = ctx.getResponse()
+                        res
+
+                    } finally {
+                        ctx.close()
                     }
-
-                    onComplete(ctx)
-
-                    val res = ctx.getResponse()
-                    ctx.close()
-                    res
                 }
         }
         return res
