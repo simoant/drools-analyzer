@@ -3,6 +3,7 @@ package com.github.simoant.drools.analyzer
 import com.github.simoant.drools.analyzer.model.AnalyzerRequest
 import com.github.simoant.drools.analyzer.model.AnalyzerResponse
 import com.github.simoant.drools.analyzer.model.DataRequest
+import com.github.simoant.drools.analyzer.model.IDroolsDecision
 import com.github.simoant.drools.analyzer.utils.log
 import org.assertj.core.api.Assertions
 import org.junit.Test
@@ -107,6 +108,7 @@ class AnalyzerTest {
 }
 
 data class TestInput(val value: String = "input")
+data class IntermediateDecision(val value: String = "intermediate decision"): IDroolsDecision
 data class FirstTestObject(val value: String = "first")
 data class SecondTestObject(val value: String = "second")
 

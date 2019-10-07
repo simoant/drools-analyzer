@@ -21,12 +21,14 @@ data class Context(val request: AnalyzerRequest,
                    val kieContainer: KieContainer,
                    val auditLoggerFactory: ((session: KieSession, request: AnalyzerRequest) -> KieRuntimeLogger?)? = null) {
 
+
     val kieSession: KieSession
 
     var aggrPhase: Boolean = false
     var aggrPhaseHandle: FactHandle? = null
     var countFired = -1
-    var factHandles: Collection<FactHandle> = listOf()
+    var factObjects: Collection<Any> = listOf()
+    var prevFactObjects: Collection<Any> = listOf()
     var dataRequests: List<DataRequest> = listOf()
     var markers: List<Any> = listOf()
     var prevResponses: List<DataResponse> = listOf()
@@ -80,12 +82,15 @@ data class Context(val request: AnalyzerRequest,
     fun fireAllRules(maxRules: Int): Int {
         iterationCount++
         countFired = kieSession.fireAllRules(maxRules)
-        factHandles = kieSession.getFactHandles<FactHandle> { true }
-        dataRequests = factHandles
-            .mapNotNull { kieSession.getObject(it) as? DataRequest }
+        prevFactObjects = factObjects
+        factObjects = kieSession.getFactHandles<FactHandle>({ true })
+            .map { kieSession.getObject(it) }
 
-        markers = factHandles
-            .mapNotNull { kieSession.getObject(it) as? InjectMarker }
+        dataRequests = factObjects
+            .mapNotNull { it as? DataRequest }
+
+        markers = factObjects
+            .mapNotNull { it as? InjectMarker }
             .map { it.body }
 //        log.trace("Analyzer#run(): rules fired: $countFired when executing drools request $request")
 //
@@ -141,7 +146,7 @@ data class Context(val request: AnalyzerRequest,
         }
 
 
-        factHandles
+        kieSession.getFactHandles<FactHandle>({true})
             .filter { kieSession.getObject(it) is DataRequest }
             .forEach { kieSession.delete(it) }
 
@@ -183,17 +188,25 @@ data class Context(val request: AnalyzerRequest,
         val dataResponsesString =
             listToIndentedString(dataRequests, logger.DEFAULT_INDENTS * 2)
 
-        val factHandles =
-            factHandles
-                .map { kieSession.getObject(it)}
+        val newDecisions =
+            factObjects
+                .filter { !prevFactObjects.contains(it) }
                 .filter {it is IDroolsDecision}
                 .let { listToIndentedString(it, logger.DEFAULT_INDENTS * 2) }
+
+        val removedDecisions =
+            prevFactObjects
+                .filter { !factObjects.contains(it) }
+                .filter {it is IDroolsDecision}
+                .let { listToIndentedString(it, logger.DEFAULT_INDENTS * 2) }
+
 //                .joinToString(",")
 //                .let { listToIndentedString(listOf(it), 5) }
 
         logger.log("-Input data:\n{}", prevRespDataString)
-        logger.log("-Decisionяs:\n{}", factHandles)
-        logger.log("-Output data requests:\n{}", dataResponsesString)
+        logger.log("-New Decisions:\n{}", newDecisions)
+        logger.log("-Removed Decisions:\n{}", removedDecisions)
+        logger.log("-Data requests:\n{}", dataResponsesString)
         logger.log("-Rules fired:{}", countFired)
     }
 

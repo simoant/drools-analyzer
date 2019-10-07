@@ -7,4 +7,4 @@ data class AnalyzerRequest(
 )
 data class AnalyzerResponse(
     val data: Any? = null
-)
+): IDroolsDecision

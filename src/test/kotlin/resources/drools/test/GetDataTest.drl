@@ -12,17 +12,27 @@ when
     $obj: TestInput($value: value)
 then
     DataRequest dr = new DataRequest("first", "first request", true, false);
-    DataRequest dr2 = new DataRequest("second", "first request", true, false);
     ctx.log("First rule");
     insertLogical(dr);
-    insertLogical(dr2);
  end
 
 rule SecondRule
 when
     $obj: FirstTestObject()
 then
-    AnalyzerResponse ar = new AnalyzerResponse("response");
-    insertLogical(ar);
+    DataRequest dr2 = new DataRequest("second", "first request", true, false);
+    insert(new IntermediateDecision());
+    insertLogical(dr2);
     ctx.log("Second rule");
+ end
+
+rule ThirdRule
+when
+    $obj: SecondTestObject()
+    $inter: IntermediateDecision()
+then
+    retract($inter);
+    AnalyzerResponse ar = new AnalyzerResponse("response");
+    insert(ar);
+    ctx.log("Third rule");
  end
