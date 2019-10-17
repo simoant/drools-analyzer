@@ -191,7 +191,14 @@ data class Context(val request: AnalyzerRequest,
         val newDecisions =
             factObjects
                 .filter { !prevFactObjects.contains(it) }
-                .filter {it is IDroolsDecision}
+                .filter { it is IDroolsDecision }
+//                .groupBy { it.javaClass }
+//                .flatMap {
+//                    if (it.value.size > MAX_LOG_LIST_SIZE)
+//                        listOf(it.value)
+//                    else
+//                        it.value
+//                }
                 .let { listToIndentedString(it, logger.DEFAULT_INDENTS * 2) }
 
         val removedDecisions =

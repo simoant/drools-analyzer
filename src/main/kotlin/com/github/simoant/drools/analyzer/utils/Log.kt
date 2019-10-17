@@ -1,5 +1,6 @@
 package com.github.simoant.drools.analyzer.utils
 
+import com.github.simoant.drools.analyzer.MAX_LOG_LIST_SIZE
 import org.slf4j.LoggerFactory
 import java.util.*
 
@@ -8,7 +9,23 @@ val Any.log
 
 fun listToIndentedString(list: List<Any?>, indents: Int = 0): String {
     val indent = " ".repeat(indents)
-    return list.joinToString(separator = "\n" + indent).let { indent + if (it.isNotEmpty()) it else "<empty>" }
+    return list
+        .groupBy { it?.javaClass ?: "null" }
+        .flatMap {
+            if (it.value.size > MAX_LOG_LIST_SIZE)
+                listOf(it.value)
+            else
+                it.value
+        }
+        .joinToString(separator = "\n" + indent) {
+            if (it is Collection<*>) {
+                val size = it.size
+                it.firstOrNull()
+                    ?.let { "${size} ${it.javaClass.simpleName}'s" }
+                    ?: ""
+            } else it.toString()
+        }
+        .let { indent + if (it.isNotEmpty()) it else "<empty>" }
 }
 
 class Logger() {

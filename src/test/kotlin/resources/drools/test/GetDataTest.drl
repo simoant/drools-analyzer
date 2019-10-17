@@ -21,7 +21,13 @@ when
     $obj: FirstTestObject()
 then
     DataRequest dr2 = new DataRequest("second", "first request", true, false);
-    insert(new IntermediateDecision());
+    insert(new TestDecision1());
+    insert(new TestDecision1());
+    insert(new TestDecision1());
+    insert(new TestDecision1());
+    insert(new TestDecision1());
+    insert(new TestDecision1());
+    insert(new TestDecision2());
     insertLogical(dr2);
     ctx.log("Second rule");
  end
@@ -29,7 +35,8 @@ then
 rule ThirdRule
 when
     $obj: SecondTestObject()
-    $inter: IntermediateDecision()
+    $inter: TestDecision1()
+    exists(TestDecision2())
 then
     retract($inter);
     AnalyzerResponse ar = new AnalyzerResponse("response");
