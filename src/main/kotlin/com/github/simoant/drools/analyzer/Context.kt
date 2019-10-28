@@ -22,6 +22,7 @@ data class Context(val request: AnalyzerRequest,
                    val auditLoggerFactory: ((session: KieSession, request: AnalyzerRequest) -> KieRuntimeLogger?)? = null) {
 
 
+
     val kieSession: KieSession
 
     var aggrPhase: Boolean = false
@@ -29,9 +30,11 @@ data class Context(val request: AnalyzerRequest,
     var countFired = -1
     var factObjects: Collection<Any> = listOf()
     var prevFactObjects: Collection<Any> = listOf()
+    var prevDecisions: Collection<IDroolsDecision> = listOf()
     var dataRequests: List<DataRequest> = listOf()
     var markers: List<Any> = listOf()
     var prevResponses: List<DataResponse> = listOf()
+
     var iterationCount = 0
 
     val logger = Logger()
@@ -147,7 +150,7 @@ data class Context(val request: AnalyzerRequest,
         }
 
 
-        kieSession.getFactHandles<FactHandle>({true})
+        kieSession.getFactHandles<FactHandle>({ true })
             .filter { kieSession.getObject(it) is DataRequest }
             .forEach { kieSession.delete(it) }
 
@@ -185,36 +188,30 @@ data class Context(val request: AnalyzerRequest,
         val inputData =
             prevResponses.map { it } + initialRequest + markers
         val prevRespDataString =
-            listToIndentedString(inputData, logger.DEFAULT_INDENTS * 2 )
-        val dataResponsesString =
+            listToIndentedString(inputData, logger.DEFAULT_INDENTS * 2)
+        val dataRequestsString =
             listToIndentedString(dataRequests, logger.DEFAULT_INDENTS * 2)
 
-        val newDecisions =
-            factObjects
-                .filter { !prevFactObjects.contains(it) }
-                .filter { it is IDroolsDecision }
-//                .groupBy { it.javaClass }
-//                .flatMap {
-//                    if (it.value.size > MAX_LOG_LIST_SIZE)
-//                        listOf(it.value)
-//                    else
-//                        it.value
-//                }
+        val decisions = factObjects
+            .mapNotNull { it as? IDroolsDecision }
+
+        val newDecisionsStr =
+            decisions
+                .filter { !prevDecisions.contains(it) }
                 .let { listToIndentedString(it, logger.DEFAULT_INDENTS * 2) }
+
 
         val removedDecisions =
-            prevFactObjects
-                .filter { !factObjects.contains(it) }
-                .filter {it is IDroolsDecision}
+            prevDecisions
+                .filter { !decisions.contains(it) }
                 .let { listToIndentedString(it, logger.DEFAULT_INDENTS * 2) }
 
-//                .joinToString(",")
-//                .let { listToIndentedString(listOf(it), 5) }
+        prevDecisions = decisions
 
         logger.log("-Input data:\n{}", prevRespDataString)
-        logger.log("-New Decisions:\n{}", newDecisions)
+        logger.log("-New Decisions:\n{}", newDecisionsStr)
         logger.log("-Removed Decisions:\n{}", removedDecisions)
-        logger.log("-Data requests:\n{}", dataResponsesString)
+        logger.log("-Data requests:\n{}", dataRequestsString)
         logger.log("-Rules fired:{}", countFired)
     }
 
