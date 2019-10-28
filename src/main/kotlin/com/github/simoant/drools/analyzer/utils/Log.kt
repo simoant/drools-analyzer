@@ -32,14 +32,17 @@ class Logger() {
     val DEFAULT_INDENTS: Int = 3
     var logStrBuffer: String = ""
     var logObjBuffer: List<Any> = LinkedList()
+    val startTime = System.currentTimeMillis()
 
     fun log(msg: String, vararg args: Any) {
         logWithIndent(msg, DEFAULT_INDENTS, *args)
     }
 
     fun logWithIndent(msg: String, indents: Int, vararg args: Any) {
-        logStrBuffer += " ".repeat(indents) + msg + "\n"
-        logObjBuffer = logObjBuffer.plus(args.map { it.toString() })
+        val list = args.toList().plus(System.currentTimeMillis() - startTime)
+
+        logStrBuffer += " ".repeat(indents) + msg + " ts:{}" + "\n"
+        logObjBuffer = logObjBuffer.plus(list.map { it.toString() })
     }
 
     fun flushLog(prefix: String, vararg args: Any) {

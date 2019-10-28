@@ -57,6 +57,7 @@ data class Context(val request: AnalyzerRequest,
     }
 
     fun logWithIndent(msg: String, indents: Int, vararg args: Any) {
+
         logger.logWithIndent(msg, indents, *args)
     }
 
