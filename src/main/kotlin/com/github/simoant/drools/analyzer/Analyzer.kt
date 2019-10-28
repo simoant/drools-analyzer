@@ -19,13 +19,14 @@ typealias KieRuntimeLoggerFactory =
 
 class Analyzer(val kieContainer: KieContainer,
                val requestProcessor: IDataRequestProcessor,
-               val auditLogFactory: KieRuntimeLoggerFactory? = null) {
+               val auditLogFactory: KieRuntimeLoggerFactory? = null,
+               val profile: Boolean = false) {
     private val MAX_RULES: Int = 100;
 
     fun run(request: AnalyzerRequest, trackId: String = UUID.randomUUID().toString(),
             onComplete: (ctx: Context) -> Any? = {}): CompletableFuture<AnalyzerResponse?> {
 
-        val ctx = Context(request, kieContainer, auditLogFactory)
+        val ctx = Context(request, kieContainer, auditLogFactory, profile)
 
         val res = withLoggingContext(X_UUID_NAME to trackId) {
             CoroutineScope(Dispatchers.Default)
@@ -51,9 +52,9 @@ class Analyzer(val kieContainer: KieContainer,
                                 }
                             }
 
-                            ctx.fireAllRules(MAX_RULES)
-                            //val countFired = session.fireAllRules(MAX_RULES)
 
+
+                            ctx.fireAllRules(MAX_RULES)
 
                             ctx.getAllData()
                             { dataRequest ->

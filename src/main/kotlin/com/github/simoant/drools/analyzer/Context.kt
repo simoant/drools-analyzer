@@ -19,7 +19,8 @@ import java.util.concurrent.CompletableFuture
 
 data class Context(val request: AnalyzerRequest,
                    val kieContainer: KieContainer,
-                   val auditLoggerFactory: ((session: KieSession, request: AnalyzerRequest) -> KieRuntimeLogger?)? = null) {
+                   val auditLoggerFactory: ((session: KieSession, request: AnalyzerRequest) -> KieRuntimeLogger?)? = null,
+                   val profiling: Boolean = false) {
 
 
 
@@ -59,8 +60,12 @@ data class Context(val request: AnalyzerRequest,
         logger.log(msg, *args)
     }
 
-    fun logWithIndent(msg: String, indents: Int, vararg args: Any) {
+    fun profile(msg: String, vararg args: Any) {
+        if (profiling)
+            log(msg, *args)
+    }
 
+    fun logWithIndent(msg: String, indents: Int, vararg args: Any) {
         logger.logWithIndent(msg, indents, *args)
     }
 
@@ -86,19 +91,22 @@ data class Context(val request: AnalyzerRequest,
     fun fireAllRules(maxRules: Int): Int {
         iterationCount++
         countFired = kieSession.fireAllRules(maxRules)
+        profile("Completed drools execution")
         prevFactObjects = factObjects
         factObjects = kieSession.getFactHandles<FactHandle>({ true })
             .map { kieSession.getObject(it) }
 
+        profile("Retrieved fact objects from kie session")
         dataRequests = factObjects
             .mapNotNull { it as? DataRequest }
+        profile("Retrieved data requests objects from kie session")
 
         markers = factObjects
             .mapNotNull { it as? InjectMarker }
             .map { it.body }
-//        log.trace("Analyzer#run(): rules fired: $countFired when executing drools request $request")
-//
-//        log.trace("Analyzer#run(): data requests received after drools execution: $ctx.dataRequests")
+
+        profile("Retrieved markers from kie session")
+
         logIterationResult()
         return countFired
 
@@ -121,6 +129,7 @@ data class Context(val request: AnalyzerRequest,
                 .awaitAll()
         }
 
+        profile("Received all data")
         val requestsResponses = reqResp.map {
             val exception = it.deferredResponse.getCompletionExceptionOrNull()
             val data = it.deferredResponse.getCompleted()
@@ -149,10 +158,14 @@ data class Context(val request: AnalyzerRequest,
             return@map DataRequestResponse(it.request, DataResponse(it.request.uri, data, it.et))
         }
 
+        profile("Validated data")
+
 
         kieSession.getFactHandles<FactHandle>({ true })
             .filter { kieSession.getObject(it) is DataRequest }
             .forEach { kieSession.delete(it) }
+
+        profile("Cleared kie session of Data Requests")
 
         prevResponses = requestsResponses.map { it.response }
 
@@ -164,6 +177,8 @@ data class Context(val request: AnalyzerRequest,
                 kieSession.insert(data)
         }
         markers.forEach { kieSession.insert(it) }
+
+        profile("Inserted new data to kie session")
 
         return requestsResponses.map { it.response }
     }
@@ -195,11 +210,12 @@ data class Context(val request: AnalyzerRequest,
         val decisions = factObjects
             .mapNotNull { it as? IDroolsDecision }
 
+        profile("Retrieved decisions from kie session")
+
         val newDecisionsStr =
             decisions
                 .filter { !prevDecisions.contains(it) }
                 .let { listToIndentedString(it, logger.DEFAULT_INDENTS * 2) }
-
 
         val removedDecisions =
             prevDecisions

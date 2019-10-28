@@ -19,7 +19,7 @@ class AnalyzerTest {
     fun `test one rule requests data and second supplies data`() {
         //  given
         val kieContainer = createTestKieContainer("resources/drools/test/GetDataTest.drl")
-        val analyzer = Analyzer(kieContainer, TestRequestProcessor(), null)
+        val analyzer = Analyzer(kieContainer, TestRequestProcessor(), null, true)
 
         //  when
         val res = analyzer.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
