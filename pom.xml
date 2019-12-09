@@ -6,7 +6,7 @@
 
     <groupId>com.github.simoant</groupId>
     <artifactId>drools-analyzer</artifactId>
-    <version>0.2</version>
+    <version>0.3</version>
 
     <properties>
         <camel.version>2.22.3</camel.version>

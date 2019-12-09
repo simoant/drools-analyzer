@@ -23,7 +23,6 @@ data class Context(val request: AnalyzerRequest,
                    val profiling: Boolean = false) {
 
 
-
     val kieSession: KieSession
 
     var aggrPhase: Boolean = false
@@ -114,20 +113,24 @@ data class Context(val request: AnalyzerRequest,
 
     suspend fun getAllData(dataProvider: (DataRequest) -> CompletableFuture<Any?>): List<DataResponse> {
 
-        val reqResp = dataRequests
-            .map { request -> DataRequestDefferedResponse(request, dataProvider(request).asDeferred()) }
-            .map {
-                val resp = it
-                it.deferredResponse.invokeOnCompletion {
-                    resp.et = System.currentTimeMillis() - resp.startTime
-                }
-                resp
+        val reqResp =
+            withContext(Dispatchers.IO + MDCContext()) {
+                val res = dataRequests
+                    .map { request ->
+                        DataRequestDefferedResponse(request, dataProvider(request).asDeferred())
+                    }
+                    .map {
+                        val resp = it
+                        it.deferredResponse.invokeOnCompletion {
+                            resp.et = System.currentTimeMillis() - resp.startTime
+                        }
+                        resp
+                    }
+
+                res.map { it.deferredResponse }.awaitAll()
+                res
             }
 
-        withContext(Dispatchers.IO + MDCContext()) {
-            reqResp.map { it.deferredResponse }
-                .awaitAll()
-        }
 
         profile("Received all data")
         val requestsResponses = reqResp.map {

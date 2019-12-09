@@ -22,7 +22,8 @@ class AnalyzerTest {
         val analyzer = Analyzer(kieContainer, TestRequestProcessor(), null, true)
 
         //  when
-        val res = analyzer.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
+        val res = analyzer.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())),
+            onComplete = {log.debug("On complete: $it")})
 
         //  then
         Assertions.assertThat(res.get()).isEqualTo(AnalyzerResponse("response"))
@@ -81,27 +82,52 @@ class AnalyzerTest {
 
     class TestRequestProcessor : IDataRequestProcessor {
         override fun executeAsync(request: DataRequest, trackId: String): CompletableFuture<Any?> {
-            log.debug("start $request")
-            return CompletableFuture.completedFuture(
+            log.debug("TestRequestProcessor: start $request")
+            return CompletableFuture.supplyAsync {
                 when (request.uri) {
                     "first" -> {
-                        FirstTestObject().also { log.debug("finish $it") }
+                        Thread.sleep(100)
+                        FirstTestObject().also { log.debug("TestRequestProcessor: finish $it") }
                     }
                     "second" -> {
-                        SecondTestObject().also { log.debug("finish $it") }
+                        Thread.sleep(100)
+                        SecondTestObject().also { log.debug("TestRequestProcessor: finish $it") }
                     }
                     "first_delayed" -> {
                         Thread.sleep(100)
-                        SecondTestObject().also { log.debug("finish $it") }
+                        SecondTestObject().also { log.debug("TestRequestProcessor: finish $it") }
                     }
                     "error" -> {
-                        throw java.lang.RuntimeException("Test Exception")
+                        Thread.sleep(100)
+                        throw java.lang.RuntimeException("TestRequestProcessor: Test Exception")
                     }
                     "no_data" -> {
+                        Thread.sleep(100)
                         null
                     }
-                    else -> throw RuntimeException("Invalid uri ${request.uri}")
-                })
+                    else -> throw RuntimeException("TestRequestProcessor: Invalid uri ${request.uri}")
+                }
+
+            }
+//            return CompletableFuture.completedFuture(
+//                when (request.uri) {
+//                    "first" -> {
+//                        FirstTestObject().also { log.debug("TestRequestProcessor: finish $it") }
+//                    }
+//                    "second" -> {
+//                        SecondTestObject().also { log.debug("TestRequestProcessor: finish $it") }
+//                    }
+//                    "first_delayed" -> {
+//                        SecondTestObject().also { log.debug("TestRequestProcessor: finish $it") }
+//                    }
+//                    "error" -> {
+//                        throw java.lang.RuntimeException("TestRequestProcessor: Test Exception")
+//                    }
+//                    "no_data" -> {
+//                        null
+//                    }
+//                    else -> throw RuntimeException("TestRequestProcessor: Invalid uri ${request.uri}")
+//                })
 
         }
     }
