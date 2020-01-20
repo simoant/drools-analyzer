@@ -54,7 +54,7 @@ class Analyzer(val kieContainer: KieContainer,
 
 
 
-                            ctx.fireAllRules(MAX_RULES)
+                            ctx.fireAllRules(MAX_RULES, request.agendaFilter)
 
                             ctx.getAllData()
                             { dataRequest ->

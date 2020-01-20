@@ -13,6 +13,7 @@ import org.drools.core.impl.AbstractRuntime
 import org.kie.api.logger.KieRuntimeLogger
 import org.kie.api.runtime.KieContainer
 import org.kie.api.runtime.KieSession
+import org.kie.api.runtime.rule.AgendaFilter
 import org.kie.api.runtime.rule.FactHandle
 import java.util.concurrent.CompletableFuture
 
@@ -87,9 +88,9 @@ data class Context(val request: AnalyzerRequest,
     }
 
 
-    fun fireAllRules(maxRules: Int): Int {
+    fun fireAllRules(maxRules: Int, agendaFilter: AgendaFilter? = null): Int {
         iterationCount++
-        countFired = kieSession.fireAllRules(maxRules)
+        countFired = kieSession.fireAllRules(agendaFilter, maxRules)
         profile("Completed drools execution")
         prevFactObjects = factObjects
         factObjects = kieSession.getFactHandles<FactHandle>({ true })
