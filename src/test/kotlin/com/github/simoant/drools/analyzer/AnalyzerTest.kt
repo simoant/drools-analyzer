@@ -55,9 +55,7 @@ class AnalyzerTest {
 
         // then
 
-        Assertions.assertThatThrownBy {
-            res.get()
-        }
+        Assertions.assertThat(res.get()).isNull()
     }
 
     private fun createTestKieContainer(drlPath: String): KieContainer {
