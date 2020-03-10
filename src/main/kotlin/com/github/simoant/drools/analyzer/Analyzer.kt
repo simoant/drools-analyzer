@@ -2,6 +2,7 @@ package com.github.simoant.drools.analyzer
 
 import com.github.simoant.drools.analyzer.model.AnalyzerRequest
 import com.github.simoant.drools.analyzer.model.AnalyzerResponse
+import com.github.simoant.drools.analyzer.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.future
@@ -68,7 +69,9 @@ class Analyzer(val kieContainer: KieContainer,
 
                         val res = ctx.getResponse()
                         res
-
+                    } catch (t: Throwable) {
+                        log.error("Error during drools analyzer execution", t)
+                        null
                     } finally {
                         ctx.close()
                     }

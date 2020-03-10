@@ -90,7 +90,13 @@ data class Context(val request: AnalyzerRequest,
 
     fun fireAllRules(maxRules: Int, agendaFilter: AgendaFilter? = null): Int {
         iterationCount++
-        countFired = kieSession.fireAllRules(agendaFilter, maxRules)
+
+//        try {
+            countFired = kieSession.fireAllRules(agendaFilter, maxRules)
+//        } catch (e: Throwable) {
+//            log.error("Error", e)
+//            return 0
+//        }
         profile("Completed drools execution")
         prevFactObjects = factObjects
         factObjects = kieSession.getFactHandles<FactHandle>({ true })
