@@ -1,5 +1,6 @@
 package com.github.simoant.drools.analyzer
 
+//import reactor.core.publisher.toMono
 import com.github.simoant.drools.analyzer.model.*
 import com.github.simoant.drools.analyzer.utils.Logger
 import com.github.simoant.drools.analyzer.utils.listToIndentedString
@@ -15,6 +16,7 @@ import org.kie.api.runtime.KieContainer
 import org.kie.api.runtime.KieSession
 import org.kie.api.runtime.rule.AgendaFilter
 import org.kie.api.runtime.rule.FactHandle
+import reactor.core.publisher.Mono
 import java.util.concurrent.CompletableFuture
 
 
@@ -75,7 +77,7 @@ data class Context(val request: AnalyzerRequest,
 
     fun aggrPhaseOn() {
         aggrPhaseHandle = kieSession.insert(AggregationPhase())
-        aggrPhase = true;
+        aggrPhase = true
     }
 
     fun aggrPhaseOff() {
@@ -92,7 +94,7 @@ data class Context(val request: AnalyzerRequest,
         iterationCount++
 
 //        try {
-            countFired = kieSession.fireAllRules(agendaFilter, maxRules)
+        countFired = kieSession.fireAllRules(agendaFilter, maxRules)
 //        } catch (e: Throwable) {
 //            log.error("Error", e)
 //            return 0
@@ -118,7 +120,7 @@ data class Context(val request: AnalyzerRequest,
 
     }
 
-    suspend fun getAllData(dataProvider: (DataRequest) -> CompletableFuture<Any?>): List<DataResponse> {
+    suspend fun getAllData(dataProvider: (DataRequest) -> CompletableFuture<out Any?>): List<DataResponse> {
 
         val reqResp =
             withContext(Dispatchers.IO + MDCContext()) {
@@ -143,6 +145,97 @@ data class Context(val request: AnalyzerRequest,
         val requestsResponses = reqResp.map {
             val exception = it.deferredResponse.getCompletionExceptionOrNull()
             val data = it.deferredResponse.getCompleted()
+
+            if (exception != null) {
+                val msg = "Exception occured when processing request ${it.request}, Exception: $exception"
+                if (it.request.required) {
+                    flashLog()
+                    throw DataMissingException(msg)
+                } else {
+                    log.debug(msg)
+                    return@map DataRequestResponse(it.request, DataResponse(it.request.uri, null, it.et))
+                }
+            }
+            if (data == null) {
+                val msg = "No data received when processing request ${it.request}"
+                if (it.request.required) {
+                    flashLog()
+                    throw DataMissingException(msg)
+                } else {
+                    log.debug(msg)
+                    return@map DataRequestResponse(it.request, DataResponse(it.request.uri, data, it.et))
+                }
+
+            }
+            return@map DataRequestResponse(it.request, DataResponse(it.request.uri, data, it.et))
+        }
+
+        profile("Validated data")
+
+
+        kieSession.getFactHandles<FactHandle>({ true })
+            .filter { kieSession.getObject(it) is DataRequest }
+            .forEach { kieSession.delete(it) }
+
+        profile("Cleared kie session of Data Requests")
+
+        prevResponses = requestsResponses.map { it.response }
+
+        requestsResponses.forEach {
+            val data = it.response.data
+            if (data is List<*> && it.request.splitList)
+                data.forEach { kieSession.insert(it) }
+            else
+                kieSession.insert(data)
+        }
+        markers.forEach { kieSession.insert(it) }
+
+        profile("Inserted new data to kie session")
+
+        return requestsResponses.map { it.response }
+    }
+
+    suspend fun getAllDataReactive(dataProvider: (DataRequest) -> Mono< Any?>): List<DataResponse> {
+
+        val reqResp =
+            withContext(Dispatchers.IO + MDCContext()) {
+                val res = dataRequests
+                    .map { request ->
+                        val responsePublisher = dataProvider.invoke(request)
+                        DataRequestPublisherResponse(request, responsePublisher)
+                    }
+                    .map {
+                        val resp = it
+                        it.publisherResponse.doFinally {
+                            resp.et = System.currentTimeMillis() - resp.startTime
+                        }
+                        resp
+                    }
+
+                res.map { resp ->
+                    resp.publisherResponse
+//                        .map { Mono.just(DataRequestResponse(resp.request, DataResponse(resp.request.uri, null, resp.et))) }
+                        .onErrorReturn({ t: Throwable -> !resp.request.required},  { t: Throwable ->
+                            DataRequestResponse(resp.request, DataResponse(resp.request.uri, null, resp.et))
+                        })
+//                        .onErrorResume({ t -> !resp.request.required},  { t ->
+//                            Mono.just(DataRequestResponse(resp.request, DataResponse(resp.request.uri, null, resp.et)))
+//                        })
+                        .onErrorMap({ t -> resp.request.required }, { t ->
+                            val msg = "Exception occured when processing request ${resp.request}, Exception: $t"
+                            DataMissingException(msg)
+                        })
+
+
+                }
+                res
+            }
+
+
+        profile("Received all data")
+        val requestsResponses = reqResp.map {
+            val exception = it.publisherResponse.flatMap { Mono.empty<Any>() }
+            val data = it.publisherResponse.getCompleted()
 
             if (exception != null) {
                 val msg = "Exception occured when processing request ${it.request}, Exception: $exception"

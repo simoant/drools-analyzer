@@ -67,6 +67,22 @@
             <artifactId>kotlinx-coroutines-jdk8</artifactId>
             <version>${kotlin.corourines.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
+            <version>3.3.9.RELEASE</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlinx</groupId>
+            <artifactId>kotlinx-coroutines-reactor</artifactId>
+            <version>${kotlin.corourines.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor.kotlin</groupId>
+            <artifactId>reactor-kotlin-extensions</artifactId>
+            <version>1.0.2.RELEASE</version>
+        </dependency>
 
 
         <dependency>
