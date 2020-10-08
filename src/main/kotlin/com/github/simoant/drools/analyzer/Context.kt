@@ -1,15 +1,17 @@
 package com.github.simoant.drools.analyzer
 
-//import reactor.core.publisher.toMono
 import com.github.simoant.drools.analyzer.model.*
 import com.github.simoant.drools.analyzer.utils.Logger
 import com.github.simoant.drools.analyzer.utils.listToIndentedString
 import com.github.simoant.drools.analyzer.utils.log
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.future.asDeferred
+import kotlinx.coroutines.reactive.awaitFirst
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.withContext
+import mu.withLoggingContext
 import org.drools.core.impl.AbstractRuntime
 import org.kie.api.logger.KieRuntimeLogger
 import org.kie.api.runtime.KieContainer
@@ -17,7 +19,7 @@ import org.kie.api.runtime.KieSession
 import org.kie.api.runtime.rule.AgendaFilter
 import org.kie.api.runtime.rule.FactHandle
 import reactor.core.publisher.Mono
-import java.util.concurrent.CompletableFuture
+import reactor.kotlin.core.publisher.switchIfEmpty
 
 
 data class Context(val request: AnalyzerRequest,
@@ -93,12 +95,7 @@ data class Context(val request: AnalyzerRequest,
     fun fireAllRules(maxRules: Int, agendaFilter: AgendaFilter? = null): Int {
         iterationCount++
 
-//        try {
         countFired = kieSession.fireAllRules(agendaFilter, maxRules)
-//        } catch (e: Throwable) {
-//            log.error("Error", e)
-//            return 0
-//        }
         profile("Completed drools execution")
         prevFactObjects = factObjects
         factObjects = kieSession.getFactHandles<FactHandle>({ true })
@@ -120,170 +117,125 @@ data class Context(val request: AnalyzerRequest,
 
     }
 
-    suspend fun getAllData(dataProvider: (DataRequest) -> CompletableFuture<out Any?>): List<DataResponse> {
-
-        val reqResp =
-            withContext(Dispatchers.IO + MDCContext()) {
-                val res = dataRequests
-                    .map { request ->
-                        DataRequestDefferedResponse(request, dataProvider(request).asDeferred())
-                    }
-                    .map {
-                        val resp = it
-                        it.deferredResponse.invokeOnCompletion {
-                            resp.et = System.currentTimeMillis() - resp.startTime
-                        }
-                        resp
-                    }
-
-                res.map { it.deferredResponse }.awaitAll()
-                res
-            }
-
-
-        profile("Received all data")
-        val requestsResponses = reqResp.map {
-            val exception = it.deferredResponse.getCompletionExceptionOrNull()
-            val data = it.deferredResponse.getCompleted()
-
-            if (exception != null) {
-                val msg = "Exception occured when processing request ${it.request}, Exception: $exception"
-                if (it.request.required) {
-                    flashLog()
-                    throw DataMissingException(msg)
-                } else {
-                    log.debug(msg)
-                    return@map DataRequestResponse(it.request, DataResponse(it.request.uri, null, it.et))
+    suspend fun getAllDataFuture(dataProvider: IDataRequestProcessor.IDataRequestProcessorFuture, trackId: String) =
+        getAllDataInternal(trackId) {
+            val res = dataRequests
+                .map { request ->
+                    DataRequestDefferedResponse(request, dataProvider.executeAsync(request, trackId).asDeferred())
                 }
-            }
-            if (data == null) {
-                val msg = "No data received when processing request ${it.request}"
-                if (it.request.required) {
-                    flashLog()
-                    throw DataMissingException(msg)
-                } else {
-                    log.debug(msg)
-                    return@map DataRequestResponse(it.request, DataResponse(it.request.uri, data, it.et))
+                .map {
+                    val resp = it
+                    it.deferredResponse.invokeOnCompletion {
+                        resp.et = System.currentTimeMillis() - resp.startTime
+                    }
+                    resp
                 }
 
+            res.map { it.deferredResponse }.awaitAll()
+            res.map {
+                DataRequestRawResponse(
+                    it.request, it.deferredResponse.getCompleted(), it.deferredResponse.getCompletionExceptionOrNull(), it.et)
             }
-            return@map DataRequestResponse(it.request, DataResponse(it.request.uri, data, it.et))
         }
 
-        profile("Validated data")
+
+    suspend fun getAllDataReactive(dataProvider: IDataRequestProcessor.IDataRequestProcessorReactive, trackId: String) =
+        getAllDataInternal(trackId) {
+            val startTime = System.currentTimeMillis()
+            val res = dataRequests
+                .map { request ->
+                    dataProvider.executeAsync(request, trackId)
+                        .map { data ->
+                            val et = System.currentTimeMillis() - startTime
+                            DataRequestRawResponse(request, data, null, et)
+                        }
+                        .onErrorResume { t: Throwable ->
+                            val et = System.currentTimeMillis() - startTime
+                            Mono.just(DataRequestRawResponse(request, null, t, et))
+                        }
+                        .switchIfEmpty {
+                            val et = System.currentTimeMillis() - startTime
+                            Mono.just(DataRequestRawResponse(request, null, null, et)) }
+                        .awaitFirst()
+                }
+            res
+        }
 
 
+    private fun removeDataRequestsFromDrools(kieSession: KieSession) {
         kieSession.getFactHandles<FactHandle>({ true })
             .filter { kieSession.getObject(it) is DataRequest }
             .forEach { kieSession.delete(it) }
-
-        profile("Cleared kie session of Data Requests")
-
-        prevResponses = requestsResponses.map { it.response }
-
-        requestsResponses.forEach {
-            val data = it.response.data
-            if (data is List<*> && it.request.splitList)
-                data.forEach { kieSession.insert(it) }
-            else
-                kieSession.insert(data)
-        }
-        markers.forEach { kieSession.insert(it) }
-
-        profile("Inserted new data to kie session")
-
-        return requestsResponses.map { it.response }
     }
 
-    suspend fun getAllDataReactive(dataProvider: (DataRequest) -> Mono< Any?>): List<DataResponse> {
+    private suspend fun getAllDataInternal(trackId: String,
+                                           rawDataSupplier: suspend CoroutineScope.() -> List<DataRequestRawResponse>)
+        : List<DataResponse> {
+        withLoggingContext(X_UUID_NAME to trackId) {
 
-        val reqResp =
-            withContext(Dispatchers.IO + MDCContext()) {
-                val res = dataRequests
-                    .map { request ->
-                        val responsePublisher = dataProvider.invoke(request)
-                        DataRequestPublisherResponse(request, responsePublisher)
-                    }
-                    .map {
-                        val resp = it
-                        it.publisherResponse.doFinally {
-                            resp.et = System.currentTimeMillis() - resp.startTime
-                        }
-                        resp
-                    }
+            val rawResponseList = withContext(Dispatchers.IO + MDCContext(), rawDataSupplier)
 
-                res.map { resp ->
-                    resp.publisherResponse
-//                        .map { Mono.just(DataRequestResponse(resp.request, DataResponse(resp.request.uri, null, resp.et))) }
-                        .onErrorReturn({ t: Throwable -> !resp.request.required},  { t: Throwable ->
-                            DataRequestResponse(resp.request, DataResponse(resp.request.uri, null, resp.et))
-                        })
-//                        .onErrorResume({ t -> !resp.request.required},  { t ->
-//                            Mono.just(DataRequestResponse(resp.request, DataResponse(resp.request.uri, null, resp.et)))
-//                        })
-                        .onErrorMap({ t -> resp.request.required }, { t ->
-                            val msg = "Exception occured when processing request ${resp.request}, Exception: $t"
-                            DataMissingException(msg)
-                        })
+            profile("Received all data")
+            val responseList = prepareDataList(rawResponseList)
 
+            profile("Validated data")
 
-                }
-                res
-            }
+            removeDataRequestsFromDrools(kieSession)
 
+            profile("Cleared kie session of Data Requests")
 
-        profile("Received all data")
-        val requestsResponses = reqResp.map {
-            val exception = it.publisherResponse.flatMap { Mono.empty<Any>() }
-            val data = it.publisherResponse.getCompleted()
+            prevResponses = responseList.map { it.response }
 
-            if (exception != null) {
-                val msg = "Exception occured when processing request ${it.request}, Exception: $exception"
-                if (it.request.required) {
-                    flashLog()
-                    throw DataMissingException(msg)
-                } else {
-                    log.debug(msg)
-                    return@map DataRequestResponse(it.request, DataResponse(it.request.uri, null, it.et))
-                }
-            }
-            if (data == null) {
-                val msg = "No data received when processing request ${it.request}"
-                if (it.request.required) {
-                    flashLog()
-                    throw DataMissingException(msg)
-                } else {
-                    log.debug(msg)
-                    return@map DataRequestResponse(it.request, DataResponse(it.request.uri, data, it.et))
-                }
+            pushDataToDrools(responseList, kieSession)
 
-            }
-            return@map DataRequestResponse(it.request, DataResponse(it.request.uri, data, it.et))
+            profile("Inserted new data to kie session")
+
+            return responseList.map { it.response }
         }
+    }
 
-        profile("Validated data")
+    private fun prepareDataList(reqResp: List<DataRequestRawResponse>): List<DataRequestResponse> {
+        return reqResp.map {
+            return@map prepareResponseData(it.data, it.error, it.request, it.et)
+        }
+    }
 
+    private fun prepareResponseData(data: Any?, exception: Throwable?,
+                                    dataRequest: DataRequest, et: Long?): DataRequestResponse {
+        if (exception != null) {
+            val msg = "Exception occured when processing request $dataRequest, Exception: $request"
+            if (dataRequest.required) {
+                flashLog()
+                log.error(msg, exception)
+                throw DataMissingException(msg)
+            } else {
+                log.warn(msg)
+                return DataRequestResponse(dataRequest, DataResponse(dataRequest.uri, null, et))
+            }
+        } else if (data == null) {
+            val msg = "No data received when processing request $dataRequest"
+            if (dataRequest.required) {
+                flashLog()
+                log.error(msg)
+                throw DataMissingException(msg)
+            } else {
+                log.warn(msg)
+                return DataRequestResponse(dataRequest, DataResponse(dataRequest.uri, data, et))
+            }
 
-        kieSession.getFactHandles<FactHandle>({ true })
-            .filter { kieSession.getObject(it) is DataRequest }
-            .forEach { kieSession.delete(it) }
+        }
+        return DataRequestResponse(dataRequest, DataResponse(dataRequest.uri, data, et))
+    }
 
-        profile("Cleared kie session of Data Requests")
-
-        prevResponses = requestsResponses.map { it.response }
-
+    private fun pushDataToDrools(requestsResponses: List<DataRequestResponse>, ks: KieSession) {
         requestsResponses.forEach {
             val data = it.response.data
             if (data is List<*> && it.request.splitList)
-                data.forEach { kieSession.insert(it) }
+                data.forEach { ks.insert(it) }
             else
-                kieSession.insert(data)
+                ks.insert(data)
         }
-        markers.forEach { kieSession.insert(it) }
-
-        profile("Inserted new data to kie session")
-
-        return requestsResponses.map { it.response }
+        markers.forEach { ks.insert(it) }
     }
 
     fun getResponse(): AnalyzerResponse? {

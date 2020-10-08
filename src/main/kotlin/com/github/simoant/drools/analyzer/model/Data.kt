@@ -1,7 +1,6 @@
 package com.github.simoant.drools.analyzer.model
 
 import kotlinx.coroutines.Deferred
-import reactor.core.publisher.Mono
 
 data class DataRequest (
     val uri: String,
@@ -28,10 +27,10 @@ data class DataRequestDefferedResponse(
 
 )
 
-data class DataRequestPublisherResponse(
+data class DataRequestRawResponse(
     val request: DataRequest,
-    val publisherResponse: Mono<Any?>,
-    val startTime: Long = System.currentTimeMillis(),
+    val data: Any?,
+    val error: Throwable?,
     var et: Long? = null
 
 )

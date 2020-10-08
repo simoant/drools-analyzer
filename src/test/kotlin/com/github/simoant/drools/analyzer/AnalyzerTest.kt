@@ -6,56 +6,77 @@ import com.github.simoant.drools.analyzer.model.DataRequest
 import com.github.simoant.drools.analyzer.model.IDroolsDecision
 import com.github.simoant.drools.analyzer.utils.log
 import org.assertj.core.api.Assertions
+import org.junit.Before
 import org.junit.Test
 import org.kie.api.KieServices
 import org.kie.api.runtime.KieContainer
 import org.kie.internal.io.ResourceFactory
+import reactor.core.publisher.Mono
+import reactor.kotlin.core.publisher.toMono
 import java.util.concurrent.CompletableFuture
 
 
 class AnalyzerTest {
 
+    @Before
+    fun init() {
+//        Hooks.onOperatorDebug()
+    }
     @Test
-    fun `test one rule requests data and second supplies data`() {
+    fun `test one rule requests data and second supplies data (Future Processor)`() {
         //  given
         val kieContainer = createTestKieContainer("resources/drools/test/GetDataTest.drl")
-        val analyzer = Analyzer(kieContainer, TestRequestProcessor(), null, true)
+        val analyzerFuture = Analyzer(kieContainer, TestRequestProcessorFuture(), null, true)
+        val analyzerReactive = Analyzer(kieContainer, TestRequestProcessorReactive(), null, true)
 
         //  when
-        val res = analyzer.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())),
-            onComplete = {log.debug("On complete: $it")})
+        log.debug("FUTURE")
+        val resF = analyzerFuture.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())),
+            onComplete = { log.debug("On complete: $it") })
+        log.debug("REACTIVE")
+        val resR = analyzerReactive.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())),
+            onComplete = { log.debug("On complete: $it") })
 
         //  then
-        Assertions.assertThat(res.get()).isEqualTo(AnalyzerResponse("response"))
+        Assertions.assertThat(resF.get()).isEqualTo(AnalyzerResponse("response"))
+        Assertions.assertThat(resR.get()).isEqualTo(AnalyzerResponse("response"))
     }
+
 
     @Test
     fun `test request optional data but get no data from provider`() {
         //  given
         val kieContainer = createTestKieContainer("resources/drools/test/TestNoResultOptional.drl")
-        val analyzer = Analyzer(kieContainer, TestRequestProcessor(), null )
+        val analyzerF = Analyzer(kieContainer, TestRequestProcessorFuture(), null)
+        val analyzerR = Analyzer(kieContainer, TestRequestProcessorReactive(), null)
 
         //  when
-        val res = analyzer.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
+        log.debug("FUTURE")
+//        val resF = analyzerF.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
+        log.debug("REACTIVE")
+        val resR = analyzerR.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
 
         //  then
-        Assertions.assertThat(res.get()).isNull()
-
-
+//        Assertions.assertThat(resF.get()).isNull()
+        Assertions.assertThat(resR.get()).isNull()
     }
+
     @Test
 
     fun `test request mandatory data but get no data from provider`() {
         //  given
         val kieContainer = createTestKieContainer("resources/drools/test/TestNoResultMandatory.drl")
-        val analyzer = Analyzer(kieContainer, TestRequestProcessor(), null )
+        val analyzerF = Analyzer(kieContainer, TestRequestProcessorFuture(), null)
+        val analyzerR = Analyzer(kieContainer, TestRequestProcessorFuture(), null)
 
         //  when
-        val res = analyzer.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
+        val resF = analyzerF.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
+        val resR = analyzerR.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
 
         // then
 
-        Assertions.assertThat(res.get()).isNull()
+        Assertions.assertThat(resF.get()).isNull()
+        Assertions.assertThat(resR.get()).isNull()
     }
 
     private fun createTestKieContainer(drlPath: String): KieContainer {
@@ -63,8 +84,8 @@ class AnalyzerTest {
         val resources = listOf(
             // loads file from "real" filesystem
 
-             ResourceFactory
-                 .newFileResource(javaClass.classLoader.getResource(drlPath)!!.file)
+            ResourceFactory
+                .newFileResource(javaClass.classLoader.getResource(drlPath)!!.file)
 
 
         )
@@ -78,7 +99,7 @@ class AnalyzerTest {
         return kieContainer
     }
 
-    class TestRequestProcessor : IDataRequestProcessor {
+    class TestRequestProcessorFuture : IDataRequestProcessor.IDataRequestProcessorFuture {
         override fun executeAsync(request: DataRequest, trackId: String): CompletableFuture<Any?> {
             log.debug("TestRequestProcessor: start $request")
             return CompletableFuture.supplyAsync {
@@ -107,33 +128,21 @@ class AnalyzerTest {
                 }
 
             }
-//            return CompletableFuture.completedFuture(
-//                when (request.uri) {
-//                    "first" -> {
-//                        FirstTestObject().also { log.debug("TestRequestProcessor: finish $it") }
-//                    }
-//                    "second" -> {
-//                        SecondTestObject().also { log.debug("TestRequestProcessor: finish $it") }
-//                    }
-//                    "first_delayed" -> {
-//                        SecondTestObject().also { log.debug("TestRequestProcessor: finish $it") }
-//                    }
-//                    "error" -> {
-//                        throw java.lang.RuntimeException("TestRequestProcessor: Test Exception")
-//                    }
-//                    "no_data" -> {
-//                        null
-//                    }
-//                    else -> throw RuntimeException("TestRequestProcessor: Invalid uri ${request.uri}")
-//                })
+        }
+    }
 
+    class TestRequestProcessorReactive : IDataRequestProcessor.IDataRequestProcessorReactive {
+        private val delegate = TestRequestProcessorFuture()
+        override fun executeAsync(request: DataRequest, trackId: String): Mono<Any?> {
+            return delegate.executeAsync(request, trackId).toMono()
         }
     }
 }
 
+
 data class TestInput(val value: String = "input")
-data class TestDecision1(val value: String = "Test decision 1"): IDroolsDecision
-data class TestDecision2(val value: String = "Test decision 2"): IDroolsDecision
+data class TestDecision1(val value: String = "Test decision 1") : IDroolsDecision
+data class TestDecision2(val value: String = "Test decision 2") : IDroolsDecision
 data class FirstTestObject(val value: String = "first")
 data class SecondTestObject(val value: String = "second")
 

@@ -22,7 +22,7 @@ class Analyzer(val kieContainer: KieContainer,
                val requestProcessor: IDataRequestProcessor,
                val auditLogFactory: KieRuntimeLoggerFactory? = null,
                val profile: Boolean = false) {
-    private val MAX_RULES: Int = 100;
+    private val MAX_RULES: Int = 100
 
     fun run(request: AnalyzerRequest, trackId: String = UUID.randomUUID().toString(),
             onComplete: (ctx: Context) -> Any? = {}): CompletableFuture<AnalyzerResponse?> {
@@ -53,15 +53,14 @@ class Analyzer(val kieContainer: KieContainer,
                                 }
                             }
 
-
-
                             ctx.fireAllRules(MAX_RULES, request.agendaFilter)
 
-                            ctx.getAllData()
-                            { dataRequest ->
-                                withLoggingContext(X_UUID_NAME to trackId) {
-                                    requestProcessor.executeAsync(dataRequest, trackId)
-                                }
+                            when (requestProcessor) {
+                                is IDataRequestProcessor.IDataRequestProcessorFuture ->
+                                    ctx.getAllDataFuture(requestProcessor, trackId)
+                                is IDataRequestProcessor.IDataRequestProcessorReactive ->
+                                    ctx.getAllDataReactive(requestProcessor, trackId)
+                                else -> log.error("Unsupported request processor: $requestProcessor")
                             }
                         }
 
