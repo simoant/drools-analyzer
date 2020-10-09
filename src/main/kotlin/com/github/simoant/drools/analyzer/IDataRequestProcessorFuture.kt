@@ -1,7 +1,7 @@
 package com.github.simoant.drools.analyzer
 
 import com.github.simoant.drools.analyzer.model.DataRequest
-import reactor.core.publisher.Mono
+import reactor.core.CorePublisher
 import java.util.concurrent.CompletableFuture
 
 interface IDataRequestProcessor {
@@ -10,7 +10,7 @@ interface IDataRequestProcessor {
     }
 
     interface IDataRequestProcessorReactive: IDataRequestProcessor {
-        fun executeAsync(request: DataRequest, trackId: String): Mono<Any?>
+        fun executeAsync(request: DataRequest, trackId: String): CorePublisher<out Any>
     }
 }
 
