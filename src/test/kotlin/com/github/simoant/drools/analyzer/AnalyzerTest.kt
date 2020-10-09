@@ -133,7 +133,7 @@ class AnalyzerTest {
 
     class TestRequestProcessorReactive : IDataRequestProcessor.IDataRequestProcessorReactive {
         private val delegate = TestRequestProcessorFuture()
-        override fun executeAsync(request: DataRequest, trackId: String): Mono<Any?> {
+        override fun executeAsync(request: DataRequest, trackId: String): Mono<Any> {
             return delegate.executeAsync(request, trackId).toMono()
         }
     }
