@@ -209,7 +209,8 @@ data class Context(val request: AnalyzerRequest,
                 log.error(msg, exception)
                 throw DataMissingException(msg)
             } else {
-                log.warn(msg)
+//                log.warn(msg)
+                log.error(msg, exception)
                 return DataRequestResponse(dataRequest, DataResponse(dataRequest.uri, null, et))
             }
         } else if (data == null) {
