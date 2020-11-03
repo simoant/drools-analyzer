@@ -155,8 +155,8 @@ data class Context(val request: AnalyzerRequest,
                         }
                         .switchIfEmpty {
                             val et = System.currentTimeMillis() - startTime
-                            Mono.just(DataRequestRawResponse(request, null, null, et)) }
-                        .awaitFirst()
+                            Mono.just(DataRequestRawResponse(request, null, null, et))
+                        }.awaitFirst()
                 }
             res
         }
@@ -203,7 +203,7 @@ data class Context(val request: AnalyzerRequest,
     private fun prepareResponseData(data: Any?, exception: Throwable?,
                                     dataRequest: DataRequest, et: Long?): DataRequestResponse {
         if (exception != null) {
-            val msg = "Exception occured when processing request $dataRequest, Exception: $request"
+            val msg = "Exception occured when processing request $dataRequest, Exception: $exception"
             if (dataRequest.required) {
                 flashLog()
                 log.error(msg, exception)
