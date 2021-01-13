@@ -47,7 +47,8 @@ data class Context(val request: AnalyzerRequest,
     private val startTime: Long
 
     init {
-        this.kieSession = kieContainer.newKieSession(request.sessionName)
+//        this.kieSession = kieContainer.newKieSession(request.sessionName)
+        this.kieSession = kieContainer.getKieBase(request.sessionName).newKieSession()
         kieSession.setGlobal("ctx", this)
 
         if (auditLoggerFactory != null && request.id != null)
