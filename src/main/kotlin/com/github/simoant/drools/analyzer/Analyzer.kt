@@ -53,8 +53,6 @@ class Analyzer(val kieContainer: KieContainer,
                                 }
                             }
 
-
-
                             ctx.fireAllRules(MAX_RULES, request.agendaFilter)
 
                             ctx.getAllData()
@@ -64,6 +62,7 @@ class Analyzer(val kieContainer: KieContainer,
                                 }
                             }
                         }
+
 
                         onComplete(ctx)
 
