@@ -13,6 +13,7 @@
 
         <kotlin.corourines.version>1.0.1</kotlin.corourines.version>
         <drools.version>7.46.0.Final</drools.version>
+        <reactor.version>3.4.2</reactor.version>
     </properties>
 
     <dependencies>
@@ -71,7 +72,7 @@
         <dependency>
             <groupId>io.projectreactor</groupId>
             <artifactId>reactor-core</artifactId>
-            <version>3.3.9.RELEASE</version>
+            <version>${reactor.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>

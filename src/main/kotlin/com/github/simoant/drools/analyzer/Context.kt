@@ -4,13 +4,9 @@ import com.github.simoant.drools.analyzer.model.*
 import com.github.simoant.drools.analyzer.utils.Logger
 import com.github.simoant.drools.analyzer.utils.listToIndentedString
 import com.github.simoant.drools.analyzer.utils.log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.*
 import kotlinx.coroutines.future.asDeferred
 import kotlinx.coroutines.reactive.awaitFirst
-import kotlinx.coroutines.slf4j.MDCContext
-import kotlinx.coroutines.withContext
 import mu.withLoggingContext
 import org.drools.core.impl.AbstractRuntime
 import org.kie.api.logger.KieRuntimeLogger
@@ -18,9 +14,11 @@ import org.kie.api.runtime.KieContainer
 import org.kie.api.runtime.KieSession
 import org.kie.api.runtime.rule.AgendaFilter
 import org.kie.api.runtime.rule.FactHandle
+import org.slf4j.MDC
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.switchIfEmpty
 
+const val __MDC_CONTEXT_REACTOR_KEY: String = "MDC_CONTEXT_REACTOR_KEY"
 
 data class Context(val request: AnalyzerRequest,
                    val kieContainer: KieContainer,
@@ -140,27 +138,44 @@ data class Context(val request: AnalyzerRequest,
         }
 
 
-    suspend fun getAllDataReactive(dataProvider: IDataRequestProcessor.IDataRequestProcessorReactive, trackId: String) =
+    suspend fun getAllDataReactive(dataProvider: IDataRequestProcessor.IDataRequestProcessorReactive, trackId: String) {
+        val log = this.log
+        log.info("Inside getAllDataReactive 1")
+        val copyOfContextMap = MDC.getCopyOfContextMap()
         getAllDataInternal(trackId) {
             val startTime = System.currentTimeMillis()
+            log.info("Inside getAllDataReactive 2")
             val res = dataRequests
                 .map { request ->
-                    dataProvider.executeAsync(request, trackId)
-                        .map { data ->
-                            val et = System.currentTimeMillis() - startTime
-                            DataRequestRawResponse(request, data, null, et)
+                    Mono.deferContextual {
+                        withLoggingContext(copyOfContextMap) {
+                            dataProvider.executeAsync(request, trackId)
                         }
-                        .onErrorResume { t: Throwable ->
-                            val et = System.currentTimeMillis() - startTime
-                            Mono.just(DataRequestRawResponse(request, null, t, et))
-                        }
-                        .switchIfEmpty {
-                            val et = System.currentTimeMillis() - startTime
-                            Mono.just(DataRequestRawResponse(request, null, null, et))
-                        }.awaitFirst()
+                            .map { data ->
+                                withLoggingContext(copyOfContextMap) {
+                                    log.info("Inside getAllDataReactive 3")
+                                    val et = System.currentTimeMillis() - startTime
+                                    DataRequestRawResponse(request, data, null, et)
+                                }
+
+                            }
+                            .onErrorResume { t: Throwable ->
+                                val et = System.currentTimeMillis() - startTime
+                                Mono.just(DataRequestRawResponse(request, null, t, et))
+                            }
+                            .switchIfEmpty {
+                                val et = System.currentTimeMillis() - startTime
+                                Mono.just(DataRequestRawResponse(request, null, null, et))
+                            }
+                    }
+
+                        .contextWrite { it.put(__MDC_CONTEXT_REACTOR_KEY, copyOfContextMap) }
+
+                        .awaitFirst()
                 }
             res
         }
+    }
 
 
     private fun removeDataRequestsFromDrools(kieSession: KieSession) {
@@ -170,14 +185,18 @@ data class Context(val request: AnalyzerRequest,
     }
 
     private suspend fun getAllDataInternal(trackId: String,
-                                           rawDataSupplier: suspend CoroutineScope.() -> List<DataRequestRawResponse>)
+                                           rawDataSupplier: suspend () -> List<DataRequestRawResponse>)
         : List<DataResponse> {
-        withLoggingContext(X_UUID_NAME to trackId) {
+//        withLoggingContext(X_UUID_NAME to trackId) {
 
-            val rawResponseList = withContext(Dispatchers.IO + MDCContext(), rawDataSupplier)
+
+            log.info("Inside getAllDataInternal")
+            val rawResponseList = rawDataSupplier
+            //withContext(Dispatchers.IO + MDCContext(), rawDataSupplier)
+            log.info("Inside getAllDataInternal 2")
 
             profile("Received all data")
-            val responseList = prepareDataList(rawResponseList)
+            val responseList = prepareDataList(rawResponseList())
 
             profile("Validated data")
 
@@ -192,7 +211,9 @@ data class Context(val request: AnalyzerRequest,
             profile("Inserted new data to kie session")
 
             return responseList.map { it.response }
-        }
+
+
+//        }
     }
 
     private fun prepareDataList(reqResp: List<DataRequestRawResponse>): List<DataRequestResponse> {
