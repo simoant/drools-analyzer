@@ -6,11 +6,11 @@ import java.util.concurrent.CompletableFuture
 
 interface IDataRequestProcessor {
     interface IDataRequestProcessorFuture: IDataRequestProcessor {
-        fun executeAsync(request: DataRequest, trackId: String): CompletableFuture<out Any?>
+        fun executeAsync(request: DataRequest): CompletableFuture<out Any?>
     }
 
     interface IDataRequestProcessorReactive: IDataRequestProcessor {
-        fun executeAsync(request: DataRequest, trackId: String): Mono<out Any>
+        fun executeAsync(request: DataRequest): Mono<out Any>
     }
 }
 

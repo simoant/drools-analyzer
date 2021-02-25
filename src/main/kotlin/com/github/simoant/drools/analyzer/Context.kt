@@ -7,7 +7,7 @@ import com.github.simoant.drools.analyzer.utils.log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.future.asDeferred
 import kotlinx.coroutines.reactive.awaitFirst
-import mu.withLoggingContext
+import kotlinx.coroutines.slf4j.MDCContext
 import org.drools.core.impl.AbstractRuntime
 import org.kie.api.logger.KieRuntimeLogger
 import org.kie.api.runtime.KieContainer
@@ -16,14 +16,15 @@ import org.kie.api.runtime.rule.AgendaFilter
 import org.kie.api.runtime.rule.FactHandle
 import org.slf4j.MDC
 import reactor.core.publisher.Mono
-import reactor.kotlin.core.publisher.switchIfEmpty
+import reactor.core.publisher.switchIfEmpty
 
-const val __MDC_CONTEXT_REACTOR_KEY: String = "MDC_CONTEXT_REACTOR_KEY"
+
 
 data class Context(val request: AnalyzerRequest,
                    val kieContainer: KieContainer,
                    val auditLoggerFactory: ((session: KieSession, request: AnalyzerRequest) -> KieRuntimeLogger?)? = null,
-                   val profiling: Boolean = false) {
+                   val profiling: Boolean = false,
+                   val mdcContextReactorKey: String = "MDC_CONTEXT_REACTOR_KEY") {
 
 
     val kieSession: KieSession
@@ -116,11 +117,11 @@ data class Context(val request: AnalyzerRequest,
 
     }
 
-    suspend fun getAllDataFuture(dataProvider: IDataRequestProcessor.IDataRequestProcessorFuture, trackId: String) =
-        getAllDataInternal(trackId) {
+    suspend fun getAllDataFuture(dataProvider: IDataRequestProcessor.IDataRequestProcessorFuture) =
+        getAllDataInternal() {
             val res = dataRequests
                 .map { request ->
-                    DataRequestDefferedResponse(request, dataProvider.executeAsync(request, trackId).asDeferred())
+                    DataRequestDefferedResponse(request, dataProvider.executeAsync(request).asDeferred())
                 }
                 .map {
                     val resp = it
@@ -138,41 +139,37 @@ data class Context(val request: AnalyzerRequest,
         }
 
 
-    suspend fun getAllDataReactive(dataProvider: IDataRequestProcessor.IDataRequestProcessorReactive, trackId: String) {
+    suspend fun getAllDataReactive(dataProvider: IDataRequestProcessor.IDataRequestProcessorReactive) {
         val log = this.log
-        log.info("Inside getAllDataReactive 1")
         val copyOfContextMap = MDC.getCopyOfContextMap()
-        getAllDataInternal(trackId) {
+
+        getAllDataInternal {
             val startTime = System.currentTimeMillis()
-            log.info("Inside getAllDataReactive 2")
             val res = dataRequests
                 .map { request ->
-                    Mono.deferContextual {
-                        withLoggingContext(copyOfContextMap) {
-                            dataProvider.executeAsync(request, trackId)
-                        }
+                    async(MDCContext()) {
+                        dataProvider.executeAsync(request)
                             .map { data ->
-                                withLoggingContext(copyOfContextMap) {
-                                    log.info("Inside getAllDataReactive 3")
-                                    val et = System.currentTimeMillis() - startTime
-                                    DataRequestRawResponse(request, data, null, et)
-                                }
-
+                                val et = System.currentTimeMillis() - startTime
+                                DataRequestRawResponse(request, data, null, et)
                             }
                             .onErrorResume { t: Throwable ->
                                 val et = System.currentTimeMillis() - startTime
                                 Mono.just(DataRequestRawResponse(request, null, t, et))
                             }
+
                             .switchIfEmpty {
                                 val et = System.currentTimeMillis() - startTime
                                 Mono.just(DataRequestRawResponse(request, null, null, et))
+
                             }
+                            .contextWrite {
+                                it.put(mdcContextReactorKey, copyOfContextMap)
+                            }
+                            .awaitFirst()
                     }
 
-                        .contextWrite { it.put(__MDC_CONTEXT_REACTOR_KEY, copyOfContextMap) }
-
-                        .awaitFirst()
-                }
+                }.awaitAll()
             res
         }
     }
@@ -184,33 +181,30 @@ data class Context(val request: AnalyzerRequest,
             .forEach { kieSession.delete(it) }
     }
 
-    private suspend fun getAllDataInternal(trackId: String,
-                                           rawDataSupplier: suspend () -> List<DataRequestRawResponse>)
+    private suspend fun getAllDataInternal(rawDataSupplier: suspend CoroutineScope.() -> List<DataRequestRawResponse>)
         : List<DataResponse> {
 //        withLoggingContext(X_UUID_NAME to trackId) {
 
 
-            log.info("Inside getAllDataInternal")
-            val rawResponseList = rawDataSupplier
-            //withContext(Dispatchers.IO + MDCContext(), rawDataSupplier)
-            log.info("Inside getAllDataInternal 2")
+        val rawResponseList = rawDataSupplier
+        //withContext(Dispatchers.IO + MDCContext(), rawDataSupplier)
 
-            profile("Received all data")
-            val responseList = prepareDataList(rawResponseList())
+        profile("Received all data")
+        val responseList = prepareDataList(coroutineScope { rawResponseList() })
 
-            profile("Validated data")
+        profile("Validated data")
 
-            removeDataRequestsFromDrools(kieSession)
+        removeDataRequestsFromDrools(kieSession)
 
-            profile("Cleared kie session of Data Requests")
+        profile("Cleared kie session of Data Requests")
 
-            prevResponses = responseList.map { it.response }
+        prevResponses = responseList.map { it.response }
 
-            pushDataToDrools(responseList, kieSession)
+        pushDataToDrools(responseList, kieSession)
 
-            profile("Inserted new data to kie session")
+        profile("Inserted new data to kie session")
 
-            return responseList.map { it.response }
+        return responseList.map { it.response }
 
 
 //        }

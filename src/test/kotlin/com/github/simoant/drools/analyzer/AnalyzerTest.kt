@@ -12,7 +12,7 @@ import org.kie.api.KieServices
 import org.kie.api.runtime.KieContainer
 import org.kie.internal.io.ResourceFactory
 import reactor.core.publisher.Mono
-import reactor.kotlin.core.publisher.toMono
+import reactor.core.publisher.toMono
 import java.util.concurrent.CompletableFuture
 
 
@@ -38,8 +38,8 @@ class AnalyzerTest {
             onComplete = { log.debug("On complete: $it") })
 
         //  then
-        Assertions.assertThat(resF.get()).isEqualTo(AnalyzerResponse("response"))
-        Assertions.assertThat(resR.get()).isEqualTo(AnalyzerResponse("response"))
+        Assertions.assertThat(resF.block()).isEqualTo(AnalyzerResponse("response"))
+        Assertions.assertThat(resR.block()).isEqualTo(AnalyzerResponse("response"))
     }
 
 
@@ -58,7 +58,7 @@ class AnalyzerTest {
 
         //  then
 //        Assertions.assertThat(resF.get()).isNull()
-        Assertions.assertThat(resR.get()).isNull()
+        Assertions.assertThat(resR.block()).isNull()
     }
 
     @Test
@@ -75,8 +75,8 @@ class AnalyzerTest {
 
         // then
 
-        Assertions.assertThat(resF.get()).isNull()
-        Assertions.assertThat(resR.get()).isNull()
+        Assertions.assertThat(resF.block()).isNull()
+        Assertions.assertThat(resR.block()).isNull()
     }
 
     private fun createTestKieContainer(drlPath: String): KieContainer {
@@ -100,7 +100,7 @@ class AnalyzerTest {
     }
 
     class TestRequestProcessorFuture : IDataRequestProcessor.IDataRequestProcessorFuture {
-        override fun executeAsync(request: DataRequest, trackId: String): CompletableFuture<Any?> {
+        override fun executeAsync(request: DataRequest): CompletableFuture<Any?> {
             log.debug("TestRequestProcessor: start $request")
             return CompletableFuture.supplyAsync {
                 when (request.uri) {
@@ -133,8 +133,8 @@ class AnalyzerTest {
 
     class TestRequestProcessorReactive : IDataRequestProcessor.IDataRequestProcessorReactive {
         private val delegate = TestRequestProcessorFuture()
-        override fun executeAsync(request: DataRequest, trackId: String): Mono<Any> {
-            return delegate.executeAsync(request, trackId).toMono()
+        override fun executeAsync(request: DataRequest): Mono<Any> {
+            return delegate.executeAsync(request).toMono()
         }
     }
 }
