@@ -13,6 +13,7 @@ import org.kie.api.runtime.KieContainer
 import org.kie.internal.io.ResourceFactory
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toMono
+import java.nio.file.Paths
 import java.util.concurrent.CompletableFuture
 
 
@@ -25,16 +26,16 @@ class AnalyzerTest {
     @Test
     fun `test one rule requests data and second supplies data (Future Processor)`() {
         //  given
-        val kieContainer = createTestKieContainer("resources/drools/test/GetDataTest.drl")
+        val kieContainer = createTestKieContainer("src/test/kotlin/resources/drools/test/GetDataTest.drl")
         val analyzerFuture = Analyzer(kieContainer, TestRequestProcessorFuture(), null, true)
         val analyzerReactive = Analyzer(kieContainer, TestRequestProcessorReactive(), null, true)
 
         //  when
         log.debug("FUTURE")
-        val resF = analyzerFuture.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())),
+        val resF = analyzerFuture.run(AnalyzerRequest("default", listOf(TestInput())),
             onComplete = { log.debug("On complete: $it") })
         log.debug("REACTIVE")
-        val resR = analyzerReactive.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())),
+        val resR = analyzerReactive.run(AnalyzerRequest("default", listOf(TestInput())),
             onComplete = { log.debug("On complete: $it") })
 
         //  then
@@ -46,7 +47,7 @@ class AnalyzerTest {
     @Test
     fun `test request optional data but get no data from provider`() {
         //  given
-        val kieContainer = createTestKieContainer("resources/drools/test/TestNoResultOptional.drl")
+        val kieContainer = createTestKieContainer("src/test/kotlin/resources/drools/test/TestNoResultOptional.drl")
         val analyzerF = Analyzer(kieContainer, TestRequestProcessorFuture(), null)
         val analyzerR = Analyzer(kieContainer, TestRequestProcessorReactive(), null)
 
@@ -54,7 +55,7 @@ class AnalyzerTest {
         log.debug("FUTURE")
 //        val resF = analyzerF.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
         log.debug("REACTIVE")
-        val resR = analyzerR.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
+        val resR = analyzerR.run(AnalyzerRequest("test", listOf(TestInput())))
 
         //  then
 //        Assertions.assertThat(resF.get()).isNull()
@@ -65,13 +66,13 @@ class AnalyzerTest {
 
     fun `test request mandatory data but get no data from provider`() {
         //  given
-        val kieContainer = createTestKieContainer("resources/drools/test/TestNoResultMandatory.drl")
+        val kieContainer = createTestKieContainer("src/test/kotlin/resources/drools/test/TestNoResultMandatory.drl")
         val analyzerF = Analyzer(kieContainer, TestRequestProcessorFuture(), null)
         val analyzerR = Analyzer(kieContainer, TestRequestProcessorFuture(), null)
 
         //  when
-        val resF = analyzerF.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
-        val resR = analyzerR.run(AnalyzerRequest("defaultKieSession", listOf(TestInput())))
+        val resF = analyzerF.run(AnalyzerRequest("test", listOf(TestInput())))
+        val resR = analyzerR.run(AnalyzerRequest("test", listOf(TestInput())))
 
         // then
 
@@ -85,7 +86,7 @@ class AnalyzerTest {
             // loads file from "real" filesystem
 
             ResourceFactory
-                .newFileResource(javaClass.classLoader.getResource(drlPath)!!.file)
+                .newFileResource(Paths.get(drlPath).toFile())
 
 
         )
