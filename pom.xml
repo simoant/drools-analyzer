@@ -6,7 +6,7 @@
 
     <groupId>com.github.simoant</groupId>
     <artifactId>drools-analyzer</artifactId>
-    <version>0.10</version>
+    <version>0.11</version>
 
     <properties>
         <kotlin.version>1.4.21</kotlin.version>
@@ -27,6 +27,12 @@
             <artifactId>drools-compiler</artifactId>
             <version>${drools.version}</version>
         </dependency>
+
+<!--        <dependency>-->
+<!--            <groupId>org.drools</groupId>-->
+<!--            <artifactId>drools-mvel</artifactId>-->
+<!--            <version>${drools.version}</version>-->
+<!--        </dependency>-->
 
 
         <dependency>
