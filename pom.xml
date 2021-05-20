@@ -28,22 +28,9 @@
             <version>${drools.version}</version>
         </dependency>
 
-<!--        <dependency>-->
-<!--            <groupId>org.drools</groupId>-->
-<!--            <artifactId>drools-mvel</artifactId>-->
-<!--            <version>${drools.version}</version>-->
-<!--        </dependency>-->
-
-
         <dependency>
             <groupId>org.jetbrains.kotlinx</groupId>
             <artifactId>kotlinx-coroutines-core</artifactId>
-            <version>${kotlin.corourines.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.jetbrains.kotlinx</groupId>
-            <artifactId>kotlinx-coroutines-jdk8</artifactId>
             <version>${kotlin.corourines.version}</version>
         </dependency>
 

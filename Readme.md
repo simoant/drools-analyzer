@@ -19,7 +19,8 @@ while decision is not made:
 ``` 
 ## Request data
 In order to request data you need to implement `IDataRequestProcessor.IDataRequestProcessorReactive` 
-interface which should implement a factory method pattern to provide a lambda to for each particular request *route*  
+interface which should implement a factory method pattern to provide a lambda to for each particular request *route*
+Each request will be executed asynchronously and in non-blocking manner through kotlin coroutines  
  
 ## Specific requirements 
 
