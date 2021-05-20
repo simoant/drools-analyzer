@@ -3,16 +3,17 @@ import com.github.simoant.drools.analyzer.*
 import com.github.simoant.drools.analyzer.utils.*
 import com.github.simoant.drools.analyzer.model.DataRequest
 import com.github.simoant.drools.analyzer.model.AnalyzerResponse
+import com.github.simoant.drools.analyzer.model.AnalyzerResult
 dialect "java"
 
-global Context ctx;
+global Logger logger;
 
 rule FirstRule
 when
     $obj: TestInput($value: value)
 then
     DataRequest dr = new DataRequest("first", "first request", true, false);
-    ctx.log("First rule");
+    logger.log("First rule");
     insertLogical(dr);
  end
 
@@ -29,7 +30,7 @@ then
     insert(new TestDecision1());
     insert(new TestDecision2());
     insertLogical(dr2);
-    ctx.log("Second rule");
+    logger.log("Second rule");
  end
 
 rule ThirdRule
@@ -39,7 +40,7 @@ when
     exists(TestDecision2())
 then
     retract($inter);
-    AnalyzerResponse ar = new AnalyzerResponse("response");
+    AnalyzerResult ar = new AnalyzerResult("response");
     insert(ar);
-    ctx.log("Third rule");
+    logger.log("Third rule");
  end

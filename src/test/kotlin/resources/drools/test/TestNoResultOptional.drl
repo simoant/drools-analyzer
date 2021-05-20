@@ -4,7 +4,7 @@ import com.github.simoant.drools.analyzer.utils.*
 import com.github.simoant.drools.analyzer.model.DataRequest
 dialect "java"
 
-global Context ctx;
+global Logger logger;
 
 rule FirstRule
 when
@@ -12,7 +12,7 @@ when
 then
     DataRequest dr = new DataRequest("no_data", "first request", false, false);
     DataRequest dr2 = new DataRequest("second", "second request", true, false);
-    ctx.log("First rule");
+    logger.log("First rule");
     insertLogical(dr);
     insertLogical(dr2);
  end
@@ -22,5 +22,5 @@ when
     $obj: FirstTestObject()
 then
 
-    ctx.log("Second rule");
+    logger.log("Second rule");
  end

@@ -10,8 +10,7 @@
         </encoder>
     </appender>
 
-    <logger name="com.github.simoant" level="TRACE"/>
-<!--    <logger name="org.drools" level="DEBUG"/>-->
+    <logger name="com.github.simoant" level="DEBUG"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT" />

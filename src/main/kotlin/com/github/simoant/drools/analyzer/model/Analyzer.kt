@@ -8,6 +8,11 @@ data class AnalyzerRequest(
     val id: String? = null,
     val agendaFilter: AgendaFilter? = null
 )
+data class AnalyzerResult(val data: Any?)
 data class AnalyzerResponse(
-    val data: Any? = null
-): IDroolsDecision
+    val lastIterationResult: IterationResult,
+
+): IDroolsDecision {
+    val data: Any?
+        get() = lastIterationResult.value
+}
