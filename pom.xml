@@ -9,7 +9,7 @@
     <version>0.13</version>
 
     <properties>
-        <kotlin.version>1.4.21</kotlin.version>
+        <kotlin.version>1.6.0</kotlin.version>
         <kotlin.corourines.version>1.4.2</kotlin.corourines.version>
         <drools.version>7.37.0.Final</drools.version>
         <reactor.version>3.4.2</reactor.version>
